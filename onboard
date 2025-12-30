@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+log(){ printf "\n==> %s\n" "$*"; }
+die(){ printf "\n[ERROR] %s\n" "$*" >&2; exit 1; }
+
+command -v docker >/dev/null 2>&1 || die "Docker לא מותקן או לא ב-PATH"
+docker info >/dev/null 2>&1 || die "Docker לא רץ. פתח Docker Desktop / Colima."
+
+ARCH="$(uname -m)"
+case "$ARCH" in
+  arm64|aarch64) ARCH_TAG="arm64" ;;
+  x86_64|amd64)  ARCH_TAG="amd64" ;;
+  *) ARCH_TAG="$ARCH" ;;
+esac
+
+log "Host architecture: $ARCH_TAG"
+
+log "Building dev container image"
+docker build -t onboarding-poc:dev -f .devcontainer/Dockerfile .
+
+log "Starting local dependencies"
+docker compose -f compose.yml up -d
+
+log "Waiting for database to be ready"
+for i in {1..30}; do
+  if docker compose -f compose.yml exec -T db pg_isready -U postgres >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+log "Running tests inside the dev container"
+docker run --rm -t \
+  --network onboarding-poc_default \
+  -v "$PWD":/workspace \
+  -w /workspace \
+  -e DATABASE_URL="postgresql://postgres:postgres@db:5432/postgres" \
+  onboarding-poc:dev \
+  bash -lc "python -V && pip -V && pytest -q"
+
+log "Running smoke test"
+bash scripts/smoke_test.sh
+
+log "✅ Ready for first commit"
+echo "Suggested next steps:"
+echo "  git status"
+echo "  git add -A && git commit -m \"chore: first commit (onboarding POC)\""
