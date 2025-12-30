@@ -1,0 +1,14 @@
+{
+  "name": "onboarding-poc",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "workspaceFolder": "/workspace",
+  "runArgs": ["--network=onboarding-poc_default"],
+  "postCreateCommand": "python -V && pip -V",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python"]
+    }
+  }
+}
